@@ -1,13 +1,12 @@
 // src/pages/AuctionsPage.jsx
-import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import axios from 'axios';
-import { io } from 'socket.io-client';
-import PageShell from '../components/layout/PageShell';
+import { useState, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { Link }    from 'react-router-dom';
+import PageShell   from '../components/layout/PageShell';
+import LiveBidTicker from '../components/ui/LiveBidTicker';
+import { fetchAuctions } from '../store/slices/auctionSlice';
 
-const API = import.meta.env.VITE_API_URL;
-
-// ── Countdown hook ────────────────────────────────────────────────────────────
+// ── Countdown hook ─────────────────────────────────────────────────────────
 function useCountdown(endTime) {
   const calc = () => {
     const diff = new Date(endTime).getTime() - Date.now();
@@ -28,26 +27,23 @@ function useCountdown(endTime) {
   return t;
 }
 
-// ── Countdown display ─────────────────────────────────────────────────────────
 function Countdown({ endTime }) {
   const { d, h, m, s, ended } = useCountdown(endTime);
-  if (ended) return <span className="text-red-400 text-sm font-semibold">Ended</span>;
+  if (ended) return <span className="text-sm font-semibold text-red-400">Ended</span>;
   const urgent = d === 0 && h === 0 && m < 10;
   return (
     <span className={`font-mono text-sm font-semibold tabular-nums ${urgent ? 'text-amber-400' : 'text-white'}`}>
-      {d > 0 && `${d}d `}{String(h).padStart(2, '0')}:{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
+      {d > 0 && `${d}d `}{String(h).padStart(2,'0')}:{String(m).padStart(2,'0')}:{String(s).padStart(2,'0')}
     </span>
   );
 }
 
-// ── Auction card ──────────────────────────────────────────────────────────────
 function AuctionCard({ auction }) {
   return (
     <Link
       to={`/properties/${auction.propertyId}`}
       className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/8 bg-neutral-900 transition hover:-translate-y-0.5 hover:border-amber-500/30 hover:shadow-lg hover:shadow-amber-950/30"
     >
-      {/* Image */}
       <div className="aspect-[16/9] overflow-hidden bg-neutral-800">
         {auction.property?.images?.[0] ? (
           <img
@@ -62,9 +58,8 @@ function AuctionCard({ auction }) {
             </svg>
           </div>
         )}
-        {/* Live badge */}
         <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-sm">
-          <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
           LIVE
         </div>
       </div>
@@ -78,6 +73,7 @@ function AuctionCard({ auction }) {
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-lg bg-white/4 p-2.5">
             <p className="text-xs text-neutral-500">Current Bid</p>
+            {/* Live value from Redux (updated by socket) */}
             <p className="text-base font-bold text-amber-400">
               {auction.highestBid || auction.startingPrice} ETH
             </p>
@@ -96,43 +92,12 @@ function AuctionCard({ auction }) {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
 export default function AuctionsPage() {
-  const [auctions, setAuctions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('active'); // active | ended
+  const dispatch = useDispatch();
+  const { auctions, loading } = useSelector((s) => s.auction);
+  const [filter, setFilter]   = useState('active');
 
-  const fetchAuctions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data } = await axios.get(`${API}/api/auctions`);
-      setAuctions(data.auctions || []);
-    } catch {
-      setAuctions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchAuctions(); }, [fetchAuctions]);
-
-  // Real-time: update highest bid on incoming bid:new events
-  useEffect(() => {
-    const socket = io(API, { transports: ['websocket'] });
-    socket.on('bid:new', ({ auctionId, amount }) => {
-      setAuctions((prev) =>
-        prev.map((a) =>
-          a._id === auctionId ? { ...a, highestBid: amount, bidCount: (a.bidCount || 0) + 1 } : a
-        )
-      );
-    });
-    socket.on('auction:ended', ({ auctionId }) => {
-      setAuctions((prev) =>
-        prev.map((a) => (a._id === auctionId ? { ...a, ended: true } : a))
-      );
-    });
-    return () => socket.disconnect();
-  }, []);
+  useEffect(() => { dispatch(fetchAuctions()); }, [dispatch]);
 
   const displayed = auctions.filter((a) =>
     filter === 'active' ? !a.ended : a.ended
@@ -150,12 +115,11 @@ export default function AuctionsPage() {
               Live Auctions
             </h1>
             <p className="text-neutral-500">
-              {displayed.length} auction{displayed.length !== 1 ? 's' : ''} •{' '}
+              {displayed.length} auction{displayed.length !== 1 ? 's' : ''} ·{' '}
               <span className="text-emerald-400">real-time bids</span>
             </p>
           </div>
 
-          {/* Filter tabs */}
           <div className="flex rounded-xl border border-white/8 bg-neutral-900 p-1 text-sm">
             {['active', 'ended'].map((f) => (
               <button
@@ -174,12 +138,14 @@ export default function AuctionsPage() {
         {loading ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-64 rounded-2xl bg-neutral-900 animate-pulse" />
+              <div key={i} className="h-64 animate-pulse rounded-2xl bg-neutral-900" />
             ))}
           </div>
         ) : displayed.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-neutral-600">
-            <p className="text-lg">{filter === 'active' ? 'No live auctions right now' : 'No ended auctions'}</p>
+            <p className="text-lg">
+              {filter === 'active' ? 'No live auctions right now' : 'No ended auctions'}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -189,6 +155,9 @@ export default function AuctionsPage() {
           </div>
         )}
       </div>
+
+      {/* Floating live bid ticker — bottom-left */}
+      <LiveBidTicker />
     </PageShell>
   );
 }

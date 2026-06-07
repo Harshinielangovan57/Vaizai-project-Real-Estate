@@ -22,29 +22,35 @@ const setRefreshCookie = (res, token) =>
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 
-/* ─── Register (email + password) ────────────────────────────────────── */
-
+// ✅ Correct
 exports.register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
+
+    if (!email || !password)
+      return res.status(400).json({ message: 'Email and password required' });
 
     const existing = await User.findOne({ email });
-    if (existing) return res.status(409).json({ message: 'Email already registered' });
+    if (existing)
+      return res.status(409).json({ message: 'Email already registered' });
 
-    const user = await User.create({ name, email, passwordHash: password }); // pre-save hook hashes it
+    const user = await User.create({ name, email, passwordHash: password });
 
-    const payload = { id: user._id, role: user.role };
-    const accessToken = signAccess(payload);
+    const payload      = { id: user._id, role: user.role };
+    const accessToken  = signAccess(payload);
     const refreshToken = signRefresh(payload);
 
     user.refreshToken = refreshToken;
     await user.save();
 
     setRefreshCookie(res, refreshToken);
-    res.status(201).json({ accessToken, user: { id: user._id, name, email, role: user.role } });
+    res.status(201).json({
+      accessToken,
+      user: { id: user._id, name, email, role: user.role },
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('[Register]', err.message);
+    res.status(500).json({ message: err.message }); // ✅ no next()
   }
 };
 
@@ -175,6 +181,39 @@ exports.me = async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json(user);
   } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.becomeSeller = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.role = 'seller';
+
+    // Sign new access and refresh tokens
+    const payload = { id: user._id, role: user.role };
+    const accessToken = signAccess(payload);
+    const refreshToken = signRefresh(payload);
+
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    setRefreshCookie(res, refreshToken);
+    res.json({
+      accessToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        walletAddress: user.walletAddress,
+        role: user.role,
+        kycStatus: user.kycStatus,
+      },
+    });
+  } catch (err) {
+    console.error('[BecomeSeller]', err.message);
     res.status(500).json({ message: err.message });
   }
 };
