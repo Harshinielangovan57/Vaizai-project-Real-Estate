@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { setAuthFromWallet } from '../store/slices/authSlice';
 // import { ethers } from 'ethers';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -103,13 +104,16 @@ function ReviewRow({ label, value }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ListPropertyPage() {
   const navigate = useNavigate();
-  const { token } = useSelector((s) => s.auth);
+  const dispatch = useDispatch();
+  const { user, token } = useSelector((s) => s.auth);
   const { isConnected, isCorrectNetwork } = useSelector((s) => s.wallet);
   const { toUsd } = useEthPrice();
   const { connect } = useWallet();
 
+  // ── All hooks must be declared BEFORE any early returns ──────────────────
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
 
   // ── Step 1: Details ──────────────────────────────────────────────────────
   const [details, setDetails] = useState({
@@ -118,40 +122,51 @@ export default function ListPropertyPage() {
     propertyType: 'House',
     bedrooms: '', bathrooms: '', squareFeet: '', yearBuilt: '',
   });
-  const setDetail = (k, v) => setDetails((d) => ({ ...d, [k]: v }));
 
   // ── Step 2: Images ───────────────────────────────────────────────────────
-  const [images, setImages]       = useState([]);
-  const [previews, setPreviews]   = useState([]);
+  const [images, setImages]         = useState([]);
+  const [previews, setPreviews]     = useState([]);
   const [primaryIdx, setPrimaryIdx] = useState(0);
+
+  // ── Step 3: Virtual tour ─────────────────────────────────────────────────
+  const [matterportUrl, setMatterportUrl]       = useState('');
+  const [tour360File, setTour360File]           = useState(null);
+  const [tour360Preview, setTour360Preview]     = useState(null);
+
+  // ── Step 4: Pricing ──────────────────────────────────────────────────────
+  const [listingType, setListingType]           = useState('fixed');
+  const [price, setPrice]                       = useState('');
+  const [auctionDuration, setAuctionDuration]   = useState('86400');
+  const [aiValuation, setAiValuation]           = useState(null);
+  const [valuationLoading, setValuationLoading] = useState(false);
+
+  // ── Step 5: Mint progress ────────────────────────────────────────────────
+  const MINT_STEPS = [
+    { label: 'Uploading images to IPFS',                         done: false },
+    { label: 'Minting property NFT on blockchain',               done: false },
+    { label: listingType === 'fixed' ? 'Creating marketplace listing' : 'Creating auction', done: false },
+  ];
+  const [mintSteps, setMintSteps] = useState(MINT_STEPS);
+
+  // ── Derived helpers (not hooks, safe after hooks) ────────────────────────
+  const setDetail = (k, v) => setDetails((d) => ({ ...d, [k]: v }));
 
   const handleImagesChange = (files, prevs) => {
     setImages(files);
     setPreviews(prevs);
   };
 
-  // ── Step 3: Virtual tour ─────────────────────────────────────────────────
-  const [matterportUrl, setMatterportUrl] = useState('');
-  const [tour360File, setTour360File]     = useState(null);
-  const [tour360Preview, setTour360Preview] = useState(null);
-
   const handleTour360 = (file, preview) => {
     setTour360File(file);
     setTour360Preview(preview);
     setMatterportUrl('');
   };
+
   const handleClearTour = () => {
     setMatterportUrl('');
     setTour360File(null);
     setTour360Preview(null);
   };
-
-  // ── Step 4: Pricing ──────────────────────────────────────────────────────
-  const [listingType, setListingType]     = useState('fixed');
-  const [price, setPrice]                 = useState('');
-  const [auctionDuration, setAuctionDuration] = useState('86400');
-  const [aiValuation, setAiValuation]     = useState(null);
-  const [valuationLoading, setValuationLoading] = useState(false);
 
   const requestAiValuation = async () => {
     setValuationLoading(true);
@@ -166,23 +181,98 @@ export default function ListPropertyPage() {
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setAiValuation({ usd: data.valuation, eth: data.suggestedEth });
+      setAiValuation({
+        usd:          data.valuation,
+        eth:          data.suggestedEth,
+        low:          data.lowEstimate,
+        high:         data.highEstimate,
+        confidence:   data.confidence,
+        trend:        data.marketTrend,
+        summary:      data.marketSummary,
+        narrative:    data.aiNarrative,
+        pricePerSqFt: data.pricePerSqFt,
+        comparables:  data.comparables || [],
+        features:     data.featureImportance || [],
+      });
       if (!price) setPrice(String(data.suggestedEth));
-      toast.success(`AI valuation: $${data.valuation.toLocaleString()}`);
-    } catch {
-      toast.error('Valuation unavailable — AI service may be offline');
+      toast.success(`AI valuation complete — $${data.valuation.toLocaleString()}`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Valuation failed — please try again');
     } finally {
       setValuationLoading(false);
     }
   };
 
-  // ── Step 5: Mint progress ────────────────────────────────────────────────
-  const MINT_STEPS = [
-    { label: 'Uploading images to IPFS',                         done: false },
-    { label: 'Minting property NFT on blockchain',               done: false },
-    { label: listingType === 'fixed' ? 'Creating marketplace listing' : 'Creating auction', done: false },
-  ];
-  const [mintSteps, setMintSteps] = useState(MINT_STEPS);
+  const handleBecomeSeller = async () => {
+    setUpgrading(true);
+    const toastId = toast.loading('Upgrading account to Seller...');
+    try {
+      const { data } = await axios.post(
+        `${API}/api/auth/become-seller`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      dispatch(setAuthFromWallet({
+        user: data.user,
+        token: data.accessToken,
+        walletAddress: user.walletAddress,
+      }));
+      toast.success('Account upgraded to Seller! You can now list properties.', { id: toastId });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Upgrade failed', { id: toastId });
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
+  // ── Early return: non-seller users ──────────────────────────────────────
+  if (user?.role === 'user') {
+    return (
+      <PageShell>
+        <div className="mx-auto max-w-md px-4 py-20 text-center">
+          {/* Background glow */}
+          <div className="pointer-events-none fixed inset-0 flex items-center justify-center">
+            <div className="h-[400px] w-[500px] rounded-full bg-indigo-600/10 blur-[100px]" />
+          </div>
+
+          <div className="relative rounded-2xl border border-white/8 bg-neutral-900 p-8 shadow-2xl animate-in fade-in zoom-in duration-300">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600/10 text-3xl text-indigo-400 select-none">
+              🔑
+            </div>
+            <h1
+              className="text-2xl font-black text-white"
+              style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}
+            >
+              Become a Seller
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-neutral-400">
+              To tokenize your real estate as NFTs, request AI valuations, and list properties for sale or auction, you need to upgrade to a Seller account.
+            </p>
+
+            <div className="mt-8 space-y-3">
+              <button
+                type="button"
+                onClick={handleBecomeSeller}
+                disabled={upgrading}
+                className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:opacity-50 active:scale-[0.98]"
+              >
+                {upgrading ? 'Upgrading...' : 'Upgrade to Seller (Free)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/marketplace')}
+                className="w-full rounded-xl border border-white/8 py-3 text-sm font-semibold text-neutral-400 transition hover:bg-white/5"
+              >
+                Back to Marketplace
+              </button>
+            </div>
+          </div>
+        </div>
+      </PageShell>
+    );
+  }
+
+
   const markDone = (i) =>
     setMintSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, done: true } : s)));
   const markError = (i) =>
@@ -494,23 +584,109 @@ export default function ListPropertyPage() {
 
             {/* AI Valuation result */}
             {aiValuation && (
-              <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-neutral-500">AI Estimated Market Value</p>
-                    <p className="text-2xl font-black text-white">
-                      ${aiValuation.usd.toLocaleString()}
+              <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 overflow-hidden">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-4 p-5 pb-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-indigo-400 text-lg">✦</span>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-indigo-400">AI Valuation Result</p>
+                      <span className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                        aiValuation.trend === 'rising'   ? 'bg-emerald-500/15 text-emerald-400' :
+                        aiValuation.trend === 'declining'? 'bg-red-500/15 text-red-400' :
+                                                           'bg-neutral-700 text-neutral-400'
+                      }`}>
+                        {aiValuation.trend === 'rising' ? '↑ Rising' : aiValuation.trend === 'declining' ? '↓ Declining' : '→ Stable'} Market
+                      </span>
+                    </div>
+                    <p className="text-3xl font-black text-white">
+                      ${aiValuation.usd.toLocaleString('en-US')}
                     </p>
-                    <p className="text-sm text-indigo-300">≈ {aiValuation.eth} ETH</p>
+                    <p className="text-sm text-indigo-300 mt-0.5">≈ {aiValuation.eth} ETH</p>
+                    <p className="text-xs text-neutral-500 mt-1">
+                      Range: ${aiValuation.low?.toLocaleString()} – ${aiValuation.high?.toLocaleString()}
+                      {aiValuation.pricePerSqFt ? ` · $${aiValuation.pricePerSqFt}/sqft` : ''}
+                    </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setPrice(String(aiValuation.eth))}
-                    className="rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition"
+                    className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition active:scale-95"
                   >
                     Use this price
                   </button>
                 </div>
+
+                {/* Confidence bar */}
+                {aiValuation.confidence && (
+                  <div className="px-5 pb-4">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-neutral-500">AI Confidence</span>
+                      <span className="text-xs font-bold text-white">{aiValuation.confidence}%</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-neutral-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-700"
+                        style={{ width: `${aiValuation.confidence}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Narrative */}
+                {aiValuation.narrative && (
+                  <div className="mx-5 mb-4 rounded-xl border border-white/5 bg-white/3 p-3.5">
+                    <p className="text-xs leading-relaxed text-neutral-400 italic">{aiValuation.narrative}</p>
+                  </div>
+                )}
+
+                {/* Market summary */}
+                {aiValuation.summary && (
+                  <div className="px-5 pb-4">
+                    <p className="text-xs text-neutral-500">{aiValuation.summary}</p>
+                  </div>
+                )}
+
+                {/* Feature importance */}
+                {aiValuation.features?.length > 0 && (
+                  <div className="border-t border-white/5 px-5 py-4">
+                    <p className="mb-3 text-xs font-semibold text-neutral-400 uppercase tracking-widest">Value Drivers</p>
+                    <div className="space-y-2">
+                      {aiValuation.features.slice(0, 4).map((f) => (
+                        <div key={f.feature}>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-neutral-400">{f.feature}</span>
+                            <span className="text-neutral-500">{Math.round(f.importance * 100)}%</span>
+                          </div>
+                          <div className="h-1 w-full rounded-full bg-neutral-800 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-indigo-500/60"
+                              style={{ width: `${Math.round(f.importance * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Comparables */}
+                {aiValuation.comparables?.length > 0 && (
+                  <div className="border-t border-white/5 px-5 py-4">
+                    <p className="mb-3 text-xs font-semibold text-neutral-400 uppercase tracking-widest">Comparable Sales</p>
+                    <div className="space-y-2">
+                      {aiValuation.comparables.slice(0, 3).map((c, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <div className="min-w-0">
+                            <p className="text-neutral-300 truncate">{c.address}</p>
+                            <p className="text-neutral-600">{c.squareFeet?.toLocaleString()} sqft · {c.bedrooms}bd/{c.bathrooms}ba · {c.daysOnMarket}d on market</p>
+                          </div>
+                          <span className="ml-4 shrink-0 font-semibold text-white">${c.salePrice?.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

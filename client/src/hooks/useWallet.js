@@ -87,7 +87,7 @@ export function useWallet() {
         // 3. Verify signature on backend, receive JWT
         const { data: authData } = await axios.post(
           `${API_BASE}/api/auth/wallet`,
-          { address, signature }
+          { walletAddress: address, signature }
         );
 
         // 4. Store token in Redux (refresh token lands in httpOnly cookie automatically)

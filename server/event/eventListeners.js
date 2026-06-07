@@ -1,12 +1,12 @@
-const ethers    = require('ethers');
-const contracts = require('../config/contracts');
+const ethers          = require('ethers');
+const { getContract } = require('../config/contracts');
 
-const Property  = require('../properties/propertyModel');
-const Listing   = require('../marketplace/listingModel');
-const Escrow    = require('../escrow/escrowModel');
-const Auction   = require('../auction/auctionModel');
-const Agreement = require('../agreements/agreementModel');
-const User      = require('../auth/userModel');
+const Property    = require('../properties/propertyModel');
+const Listing     = require('../marketplace/listingModel');
+const Escrow      = require('../escrow/escrowModel');
+const Auction     = require('../auction/auctionModel');
+const Agreement   = require('../agreements/agreementModel');
+const User        = require('../auth/userModel');
 const { settleAuctionInternal } = require('../auction/auctionController');
 
 /* ─── Retry helper ───────────────────────────────────────────────────── */
@@ -29,17 +29,16 @@ module.exports = (io) => {
     process.env.HARDHAT_RPC_URL || 'http://localhost:8545'
   );
 
-  const {
-    PropertyNFT,
-    Marketplace,
-    Escrow:          EscrowContract,
-    Auction:         AuctionContract,
-    AgreementSigner: AgreementSignerContract,
-  } = contracts.getContracts(provider);
+  // ✅ Load contracts using getContract() from config/contracts.js
+  const PropertyNFT             = getContract('PropertyNFT',      provider);
+  const Marketplace             = getContract('Marketplace',      provider);
+  const EscrowContract          = getContract('Escrow',           provider);
+  const AuctionContract         = getContract('Auction',          provider);
+  const AgreementSignerContract = getContract('AgreementSigner',  provider);
 
   /* ══════════════════════════════════════════════════════════════════
      PROPERTY NFT
-     Real events: PropertyMinted, PropertyVerified, TokenURIUpdated
+     Real events: PropertyMinted, PropertyVerified
   ══════════════════════════════════════════════════════════════════ */
 
   PropertyNFT.on('PropertyMinted', async (tokenId, owner, tokenURI, physicalAddress, squareFeet) => {
@@ -64,7 +63,6 @@ module.exports = (io) => {
     });
   });
 
-  // Real signature: PropertyVerified(uint256 indexed tokenId, bool verified)
   PropertyNFT.on('PropertyVerified', async (tokenId, verified) => {
     console.log(`[PropertyNFT] PropertyVerified — tokenId: ${tokenId}`);
     await withRetry('PropertyVerified', async () => {
@@ -159,7 +157,6 @@ module.exports = (io) => {
                   DisputeRaised, DealRefunded, DisputeResolved
   ══════════════════════════════════════════════════════════════════ */
 
-  // DealCreated(uint256 dealId, uint256 tokenId, address buyer, address seller, address arbiter)
   EscrowContract.on('DealCreated', async (dealId, tokenId, buyer, seller, arbiter) => {
     console.log(`[Escrow] DealCreated — dealId: ${dealId}, tokenId: ${tokenId}`);
     await withRetry('DealCreated', async () => {
@@ -177,7 +174,6 @@ module.exports = (io) => {
     });
   });
 
-  // FundsDeposited(uint256 dealId, address buyer, uint256 amount)
   EscrowContract.on('FundsDeposited', async (dealId, buyer, amount) => {
     console.log(`[Escrow] FundsDeposited — dealId: ${dealId}`);
     await withRetry('FundsDeposited', async () => {
@@ -204,7 +200,6 @@ module.exports = (io) => {
     });
   });
 
-  // DealCompleted(uint256 dealId, uint256 tokenId, address seller, uint256 amount)
   EscrowContract.on('DealCompleted', async (dealId, tokenId, seller, amount) => {
     console.log(`[Escrow] DealCompleted — dealId: ${dealId}`);
     await withRetry('DealCompleted', async () => {
@@ -232,7 +227,6 @@ module.exports = (io) => {
     });
   });
 
-  // DisputeRaised(uint256 dealId, address raisedBy)
   EscrowContract.on('DisputeRaised', async (dealId, raisedBy) => {
     console.log(`[Escrow] DisputeRaised — dealId: ${dealId}, by: ${raisedBy}`);
     await withRetry('DisputeRaised', async () => {
@@ -247,11 +241,13 @@ module.exports = (io) => {
         message:  `Dispute raised on escrow #${dealId}`,
         severity: 'high',
       });
-      io.emit('escrow:dispute', { escrowId: Number(dealId), raisedBy: raisedBy.toLowerCase() });
+      io.emit('escrow:dispute', {
+        escrowId: Number(dealId),
+        raisedBy: raisedBy.toLowerCase(),
+      });
     });
   });
 
-  // DealRefunded(uint256 dealId, uint256 tokenId, address buyer, uint256 amount)
   EscrowContract.on('DealRefunded', async (dealId, tokenId, buyer, amount) => {
     console.log(`[Escrow] DealRefunded — dealId: ${dealId}`);
     await withRetry('DealRefunded', async () => {
@@ -275,7 +271,6 @@ module.exports = (io) => {
     });
   });
 
-  // DisputeResolved(uint256 dealId, address resolvedBy, bool releasedToSeller)
   EscrowContract.on('DisputeResolved', async (dealId, resolvedBy, releasedToSeller) => {
     console.log(`[Escrow] DisputeResolved — dealId: ${dealId}, toSeller: ${releasedToSeller}`);
     await withRetry('DisputeResolved', async () => {
@@ -285,9 +280,9 @@ module.exports = (io) => {
         { status, 'dispute.resolvedAt': new Date() }
       );
       io.emit('escrow:dispute_resolved', {
-        escrowId:        Number(dealId),
+        escrowId:         Number(dealId),
         releasedToSeller,
-        resolvedBy:      resolvedBy.toLowerCase(),
+        resolvedBy:       resolvedBy.toLowerCase(),
       });
     });
   });
@@ -297,7 +292,6 @@ module.exports = (io) => {
      Real events: AuctionCreated, BidPlaced, BidWithdrawn, AuctionEnded
   ══════════════════════════════════════════════════════════════════ */
 
-  // AuctionCreated(uint256 auctionId, uint256 tokenId, address seller, uint256 startingPrice, ...)
   AuctionContract.on('AuctionCreated', async (auctionId, tokenId, seller, startingPrice) => {
     console.log(`[Auction] AuctionCreated — auctionId: ${auctionId}, tokenId: ${tokenId}`);
     await withRetry('AuctionCreated', async () => {
@@ -315,7 +309,6 @@ module.exports = (io) => {
     });
   });
 
-  // BidPlaced(uint256 auctionId, uint256 tokenId, address bidder, uint256 amount, ...)
   AuctionContract.on('BidPlaced', async (auctionId, tokenId, bidder, amount) => {
     console.log(`[Auction] BidPlaced — auctionId: ${auctionId}, bidder: ${bidder}`);
     await withRetry('BidPlaced', async () => {
@@ -323,7 +316,8 @@ module.exports = (io) => {
       if (!auction) return;
 
       const alreadyStored = auction.bids.some(
-        (b) => b.bidderAddress === bidder.toLowerCase() && b.amount === amount.toString()
+        (b) => b.bidderAddress === bidder.toLowerCase() &&
+               b.amount === amount.toString()
       );
       if (!alreadyStored) {
         const bidderUser = await User.findOne({ walletAddress: bidder.toLowerCase() });
@@ -344,7 +338,6 @@ module.exports = (io) => {
         await auction.save();
       }
 
-      // spec event name: bid:new
       io.emit('bid:new', {
         auctionId:  Number(auctionId),
         tokenId:    Number(tokenId),
@@ -356,7 +349,6 @@ module.exports = (io) => {
     });
   });
 
-  // BidWithdrawn(uint256 auctionId, address bidder, uint256 amount)
   AuctionContract.on('BidWithdrawn', async (auctionId, bidder, amount) => {
     console.log(`[Auction] BidWithdrawn — auctionId: ${auctionId}, bidder: ${bidder}`);
     await withRetry('BidWithdrawn', async () => {
@@ -374,7 +366,6 @@ module.exports = (io) => {
     });
   });
 
-  // AuctionEnded(uint256 auctionId, uint256 tokenId, address winner, uint256 finalBid)
   AuctionContract.on('AuctionEnded', async (auctionId, tokenId, winner, finalBid) => {
     console.log(`[Auction] AuctionEnded — auctionId: ${auctionId}, winner: ${winner}`);
     await withRetry('AuctionEnded', async () => {
@@ -395,7 +386,6 @@ module.exports = (io) => {
         }
       }
 
-      // spec event name: auction:ended
       io.emit('auction:ended', {
         auctionId: Number(auctionId),
         tokenId:   Number(tokenId),
@@ -410,7 +400,6 @@ module.exports = (io) => {
      Real events: AgreementCreated, AgreementSigned, AgreementCompleted
   ══════════════════════════════════════════════════════════════════ */
 
-  // AgreementCreated(uint256 agreementId, uint256 tokenId, address seller, address buyer, bytes32 documentHash)
   AgreementSignerContract.on('AgreementCreated', async (agreementId, tokenId, seller, buyer, documentHash) => {
     console.log(`[AgreementSigner] AgreementCreated — agreementId: ${agreementId}`);
     await withRetry('AgreementCreated', async () => {
@@ -428,7 +417,6 @@ module.exports = (io) => {
     });
   });
 
-  // AgreementSigned(uint256 agreementId, uint256 tokenId, address signer, bool isSellerSignature)
   AgreementSignerContract.on('AgreementSigned', async (agreementId, tokenId, signer, isSellerSignature) => {
     console.log(`[AgreementSigner] AgreementSigned — agreementId: ${agreementId}, signer: ${signer}`);
     await withRetry('AgreementSigned', async () => {
@@ -459,7 +447,6 @@ module.exports = (io) => {
     });
   });
 
-  // AgreementCompleted(uint256 agreementId, uint256 tokenId, address seller, address buyer)
   AgreementSignerContract.on('AgreementCompleted', async (agreementId, tokenId, seller, buyer) => {
     console.log(`[AgreementSigner] AgreementCompleted — agreementId: ${agreementId}`);
     await withRetry('AgreementCompleted', async () => {
@@ -470,7 +457,6 @@ module.exports = (io) => {
       );
 
       if (agreement?.escrowId) {
-        // Unlock escrow release step as per spec 5.1
         io.emit('agreement:completed', {
           agreementId: Number(agreementId),
           escrowId:    agreement.escrowId,
@@ -479,7 +465,6 @@ module.exports = (io) => {
         });
       }
 
-      // Notify both parties
       io.to(agreement?.createdBy?.toString()).emit('agreement:completed_notify', {
         agreementId: Number(agreementId),
         message:     'Agreement fully signed and anchored on-chain.',
