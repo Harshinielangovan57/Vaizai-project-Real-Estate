@@ -17,10 +17,35 @@ const {
   getNetworkInfo,
 } = require('../config/contracts');
 
+/**
+ * @swagger
+ * tags:
+ *   name: System Config
+ *   description: Platform deployment configuration, addresses, and smart contract ABIs
+ */
+
 // ── GET /api/config/contracts ─────────────────────────────────────────────────
 // Returns full manifest: { PropertyNFT: { address, abi }, ... }
 // Frontend uses this on init to instantiate ethers.js contract objects.
 
+/**
+ * @swagger
+ * /api/config/contracts:
+ *   get:
+ *     summary: Get full contract manifest including addresses and ABIs
+ *     tags: [System Config]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Full contract metadata manifest
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { type: object }
+ */
 router.get('/contracts', (req, res) => {
   try {
     const manifest = getFullManifest();
@@ -42,6 +67,24 @@ router.get('/contracts', (req, res) => {
 // Returns addresses only (no ABIs) — lighter payload for simple lookups.
 // { PropertyNFT: "0x...", Marketplace: "0x...", ... }
 
+/**
+ * @swagger
+ * /api/config/contracts/addresses:
+ *   get:
+ *     summary: Get deployed contract addresses only (no ABIs)
+ *     tags: [System Config]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Contract addresses lookup map
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { type: object }
+ */
 router.get('/contracts/addresses', (req, res) => {
   try {
     const addresses = getAllAddresses();
@@ -63,6 +106,24 @@ router.get('/contracts/addresses', (req, res) => {
 // Returns network metadata: { network, chainId, deployedAt, deployer }
 // Frontend uses chainId to validate MetaMask is on the right network.
 
+/**
+ * @swagger
+ * /api/config/network:
+ *   get:
+ *     summary: Get network metadata and chain status
+ *     tags: [System Config]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Active network deployment details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { type: object }
+ */
 router.get('/network', (req, res) => {
   try {
     const info = getNetworkInfo();

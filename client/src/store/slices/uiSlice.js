@@ -41,6 +41,7 @@ const initialState = {
   mobileSidebarOpen: false,
   activeAdminTab:    'stats',
   activeDashboardTab:'properties',
+  theme:             localStorage.getItem('theme') || 'dark',
 };
 
 // ── Slice ─────────────────────────────────────────────────────────────────────
@@ -49,6 +50,10 @@ const uiSlice = createSlice({
   name: 'ui',
   initialState,
   reducers: {
+    toggleTheme(state) {
+      state.theme = state.theme === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('theme', state.theme);
+    },
     // ── Modals ─────────────────────────────────────────────────────────────────
 
     openModal(state, action) {
@@ -138,6 +143,7 @@ export const {
   pushToast, dismissToast, clearToasts,
   setMobileSidebarOpen, toggleMobileSidebar,
   setActiveAdminTab, setActiveDashboardTab,
+  toggleTheme,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

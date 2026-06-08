@@ -1,13 +1,29 @@
 // src/App.jsx
-import { Provider }   from 'react-redux';
+import { Provider, useSelector }   from 'react-redux';
+import { useEffect }  from 'react';
 import { Toaster }    from 'react-hot-toast';
 import { store }      from './store';
 import AppRouter      from './router/AppRouter';
-// import SocketProvider from './components/SocketProvider';
+
+function ThemeManager() {
+  const theme = useSelector((s) => s.ui.theme);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [theme]);
+
+  return null;
+}
 
 export default function App() {
   return (
     <Provider store={store}>
+      <ThemeManager />
       {/*
         Toaster — dark-themed, top-right.
         SocketProvider is INSIDE BrowserRouter (AppRouter creates it),
