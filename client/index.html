@@ -12,6 +12,14 @@
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700;800;900&display=swap"
       rel="stylesheet"
     />
+    <!-- Theme initialization — runs before React to avoid flash of wrong theme -->
+    <script>
+      (function() {
+        var saved = localStorage.getItem('theme');
+        var theme = saved || 'dark';
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

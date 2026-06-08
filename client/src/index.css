@@ -1,6 +1,18 @@
 @import "tailwindcss";
 @reference "tailwindcss";
 
+/* ── Class-based dark mode for Tailwind v4 ───────────────────────────────── */
+@variant dark (&:where(.dark, .dark *));
+
+/* ── Design token CSS variables ──────────────────────────────────────────── */
+:root {
+  --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+:root.dark {
+  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
 /* ── Global base ─────────────────────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after {
@@ -11,10 +23,11 @@
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 
   body {
-    @apply bg-neutral-950 text-white;
+    @apply bg-white dark:bg-neutral-950 text-neutral-900 dark:text-white;
     margin: 0;
   }
 
@@ -23,48 +36,143 @@
     font-family: inherit;
   }
 
-  /* Scrollbar — thin dark style */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track  { background: transparent; }
-  ::-webkit-scrollbar-thumb  { @apply rounded-full bg-neutral-700; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-neutral-500; }
+  ::-webkit-scrollbar-thumb  { @apply rounded-full bg-neutral-300 dark:bg-neutral-700; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-neutral-400 dark:bg-neutral-500; }
 
   /* Hide scrollbar utility */
-  .scrollbar-none {
-    scrollbar-width: none;
-  }
-  .scrollbar-none::-webkit-scrollbar {
-    display: none;
-  }
+  .scrollbar-none { scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
 }
 
 /* ── Reusable component utilities ────────────────────────────────────────── */
 @layer components {
-  /* Glass card */
   .card {
-    @apply rounded-2xl border border-white/8 bg-neutral-900;
+    @apply rounded-2xl border border-neutral-200 dark:border-white/8 bg-white dark:bg-neutral-900;
+    box-shadow: var(--card-shadow);
+    transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
   }
 
-  /* Standard input */
   .input {
-    @apply w-full rounded-xl border border-white/8 bg-white/5 px-4 py-2.5
-           text-sm text-white placeholder-neutral-600 outline-none transition
-           focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20;
+    @apply w-full rounded-xl border border-neutral-200 dark:border-white/8
+           bg-neutral-50 dark:bg-white/5 px-4 py-2.5
+           text-sm text-neutral-900 dark:text-white
+           placeholder-neutral-400 dark:placeholder-neutral-600
+           outline-none transition
+           focus:border-indigo-500 dark:focus:border-indigo-500/50
+           focus:ring-1 focus:ring-indigo-500/30 dark:focus:ring-indigo-500/20;
   }
 
-  /* Primary button */
   .btn-primary {
     @apply rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold
-           text-white transition hover:bg-indigo-500 active:scale-95
+           !text-white transition hover:bg-indigo-500 active:scale-95
            disabled:cursor-not-allowed disabled:opacity-50;
   }
 
-  /* Ghost button */
   .btn-ghost {
-    @apply rounded-xl border border-white/8 px-5 py-2.5 text-sm
-           font-medium text-neutral-400 transition hover:bg-white/5;
+    @apply rounded-xl border border-neutral-200 dark:border-white/8
+           px-5 py-2.5 text-sm font-medium
+           text-neutral-600 dark:text-neutral-400
+           transition hover:bg-neutral-100 dark:hover:bg-white/5;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE — Global overrides for hardcoded dark-theme classes
+   Since components use text-white/bg-neutral-900/border-white/* throughout,
+   we remap them here for light mode without touching every component.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+html:not(.dark) {
+
+  /* ── Page & card backgrounds ── */
+  .bg-neutral-950  { background-color: #f8fafc !important; }
+  .bg-neutral-900  { background-color: #ffffff !important; }
+  .bg-neutral-800  { background-color: #f1f5f9 !important; }
+
+  /* ── Text ── */
+  .text-white      { color: #0f172a !important; }
+  .text-neutral-400{ color: #64748b !important; }
+  .text-neutral-300{ color: #475569 !important; }
+  .text-neutral-500{ color: #94a3b8 !important; }
+  .text-neutral-600{ color: #475569 !important; }
+
+  /* ── Borders ── */
+  .border-white\/8  { border-color: rgba(0,0,0,0.08)  !important; }
+  .border-white\/10 { border-color: rgba(0,0,0,0.10)  !important; }
+  .border-white\/5  { border-color: rgba(0,0,0,0.05)  !important; }
+
+  /* ── Frosted / transparent backgrounds ── */
+  .bg-white\/5  { background-color: rgba(0,0,0,0.03)  !important; }
+  .bg-white\/10 { background-color: rgba(0,0,0,0.06)  !important; }
+  .bg-white\/\[0\.02\] { background-color: rgba(0,0,0,0.02) !important; }
+
+  /* ── Section dividers ── */
+  .border-white\/5 { border-color: rgba(0,0,0,0.06)   !important; }
+
+  /* ── Inputs and forms ── */
+  input, textarea, select {
+    background-color: #f8fafc !important;
+    border-color: rgba(0,0,0,0.12) !important;
+    color: #0f172a !important;
+  }
+  input::placeholder, textarea::placeholder {
+    color: #94a3b8 !important;
+  }
+
+  /* ── Animated pulse skeletons ── */
+  .animate-pulse { background-color: #e2e8f0 !important; }
+
+  /* ══ PRESERVE coloured elements — these must ALWAYS keep white text ══ */
+  /* Indigo elements */
+  .bg-indigo-600, .bg-indigo-500, .bg-indigo-700 {
+    color: #ffffff !important;
+  }
+  .bg-indigo-600 *, .bg-indigo-500 *, .bg-indigo-700 * {
+    color: #ffffff !important;
+  }
+
+  /* Emerald / green badges */
+  .bg-emerald-500\/20, .bg-emerald-500\/10 {
+    background-color: rgba(16,185,129,0.12) !important;
+  }
+  .text-emerald-300 { color: #059669 !important; }
+  .text-emerald-400 { color: #059669 !important; }
+
+  /* Amber / auction badges */
+  .bg-amber-500\/20, .bg-amber-500\/10 {
+    background-color: rgba(245,158,11,0.12) !important;
+  }
+  .text-amber-300, .text-amber-400 { color: #d97706 !important; }
+
+  /* Red / error badges */
+  .bg-red-500\/20, .bg-red-600\/90 {
+    background-color: rgba(239,68,68,0.12) !important;
+  }
+  .text-red-400 { color: #dc2626 !important; }
+
+  /* Indigo text stays indigo */
+  .text-indigo-400 { color: #6366f1 !important; }
+  .text-indigo-300 { color: #818cf8 !important; }
+
+  /* Wallet button connected state */
+  .bg-emerald-700\/30 { background-color: rgba(6,95,70,0.1) !important; }
+  .border-emerald-500\/40 { border-color: rgba(16,185,129,0.3) !important; }
+  .text-emerald-300 { color: #059669 !important; }
+  .text-emerald-400 { color: #059669 !important; }
+  .bg-emerald-400   { background-color: #10b981 !important; }
+
+  /* Navbar backdrop */
+  header { background-color: rgba(255,255,255,0.92) !important; }
+
+  /* Dropdown menus */
+  .bg-neutral-900.shadow-xl {
+    background-color: #ffffff !important;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04) !important;
+  }
+
+  /* Tab bar active state */
+  .bg-white\/10 { background-color: rgba(99,102,241,0.08) !important; }
 }

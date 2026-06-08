@@ -109,9 +109,68 @@ const { computeValuation } = require('../ai-valuation/tmpValuationService');
 router.get('/', ctrl.getProperties);
 
 /**
- * POST /api/properties/tmp/valuate
- * Quick AI valuation before a property record exists.
- * Requires auth (seller / admin).
+ * @swagger
+ * /api/properties/tmp/valuate:
+ *   post:
+ *     summary: Quick AI valuation before a property record exists
+ *     tags: [Properties]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [city, squareFeet]
+ *             properties:
+ *               city:
+ *                 type: string
+ *                 example: Chennai
+ *               state:
+ *                 type: string
+ *                 example: Tamil Nadu
+ *               squareFeet:
+ *                 type: number
+ *                 example: 2400
+ *               bedrooms:
+ *                 type: number
+ *                 example: 4
+ *               bathrooms:
+ *                 type: number
+ *                 example: 3
+ *               propertyType:
+ *                 type: string
+ *                 example: house
+ *               yearBuilt:
+ *                 type: number
+ *                 example: 2020
+ *     responses:
+ *       200:
+ *         description: Quick AI valuation successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 valuation: { type: number }
+ *                 suggestedEth: { type: number }
+ *                 lowEstimate: { type: number }
+ *                 highEstimate: { type: number }
+ *                 confidence: { type: number }
+ *                 pricePerSqFt: { type: number }
+ *                 marketTrend: { type: string }
+ *                 marketSummary: { type: string }
+ *                 aiNarrative: { type: string }
+ *                 comparables: { type: array, items: { type: object } }
+ *                 featureImportance: { type: object }
+ *                 source: { type: string }
+ *       400:
+ *         description: city and squareFeet are required
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
  */
 router.post('/tmp/valuate', protect, (req, res) => {
   try {

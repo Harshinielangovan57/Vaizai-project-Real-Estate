@@ -256,6 +256,28 @@ router.post('/logout', protect, ctrl.logout);
  *         description: User not found
  */
 router.get('/me', protect, ctrl.me);
+/**
+ * @swagger
+ * /api/auth/become-seller:
+ *   post:
+ *     summary: Request/Upgrade user role to seller
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Upgraded to seller successfully and new access token issued
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
 router.post('/become-seller', protect, ctrl.becomeSeller);
 
 module.exports = router;

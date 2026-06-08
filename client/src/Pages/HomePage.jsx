@@ -1,6 +1,7 @@
 // src/pages/HomePage.jsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import axios from 'axios';
 import PageShell from '../components/layout/PageShell';
 
@@ -78,6 +79,7 @@ function PropertyCard({ property }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function HomePage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useSelector((s) => s.auth);
   const [query, setQuery] = useState('');
   const [featured, setFeatured] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -122,6 +124,23 @@ export default function HomePage() {
             Buy, sell, and auction tokenized properties. Trustless escrow.
             AI-powered valuations. Secure digital agreements.
           </p>
+
+          {!isAuthenticated && (
+            <div className="mt-8 flex justify-center gap-4 animate-in fade-in slide-in-from-bottom-3 duration-300">
+              <Link
+                to="/auth/login"
+                className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 active:scale-95 shadow-lg shadow-indigo-600/20"
+              >
+                Sign In to Start
+              </Link>
+              <Link
+                to="/auth/register"
+                className="rounded-xl border border-white/10 bg-neutral-900 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-white/5 active:scale-95"
+              >
+                Create Account
+              </Link>
+            </div>
+          )}
 
           {/* Search bar */}
           <form onSubmit={handleSearch} className="mx-auto mt-10 flex max-w-lg gap-2">
